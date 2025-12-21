@@ -1,0 +1,104 @@
+/* === ESTILOS DESKTOP (Se mantienen como estaban) === */
+body {
+  font-family: system-ui, sans-serif;
+  margin: 20px;
+}
+
+h2 {
+  text-align: center;
+}
+
+input {
+  display: block;
+  margin: 10px auto 20px auto;
+}
+
+.container {
+  display: flex;
+  gap: 20px;
+}
+
+.sidebar {
+  width: 280px;
+  border: 1px solid #ccc;
+  padding: 12px;
+  background: #fafafa;
+}
+
+#instruction {
+  margin-top: 10px;
+  font-weight: bold;
+  color: #0066cc;
+}
+
+#output {
+  margin-top: 10px;
+  font-weight: bold;
+}
+
+.viewer {
+  flex: 1;
+  min-width: 900px;
+  min-height: 700px; /* Esto te gusta en Desktop */
+  border: 1px solid #ccc;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+footer {
+  margin-top: 25px;
+  text-align: center;
+  font-style: italic;
+  color: #555;
+}
+
+/* === REPARACIÓN SOLO PARA MÓVIL === */
+@media only screen and (max-width: 768px) {
+  .container {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sidebar {
+    width: 95%;
+    order: 2; /* Sidebar abajo en móvil */
+  }
+
+  #instruction {
+    order: -1; /* Lo fuerza a estar al principio del flujo visual si el body fuera flex */
+    background: #e7f3ff;
+    padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    border-bottom: 2px solid #0066cc;
+    margin: 0 0 10px 0 !important;
+  }
+  .viewer {
+    width: 100%;
+    min-width: unset;  /* Quitamos los 900px que rompen el móvil */
+    min-height: unset; /* Quitamos los 700px que estiran la imagen */
+    order: 1;          /* Imagen arriba */
+    border: none;
+  }
+
+  canvas {
+    width: 100% !important;
+    height: auto !important; /* CLAVE: Esto evita que se alargue verticalmente */
+    max-height: 70vh;
+    touch-action: none;      /* Evita scroll al marcar */
+    background: #000;
+  }
+  
+  /* Botones más grandes para dedos */
+  button {
+    width: 100%;
+    padding: 15px;
+    margin: 5px 0;
+    font-size: 16px;
+  }
+}

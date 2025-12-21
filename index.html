@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>PM Caderas</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0066cc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<h2>Medición de PM de Cadera</h2>
+
+<p id="instruction" style="font-weight: bold; color: #0066cc; font-size: 1.1em; text-align: center; margin-bottom: 10px;"></p>
+
+<div style="padding: 10px; text-align: center;">
+  <input type="file" id="imageInput" accept="image/*" capture="environment" />
+</div>
+
+<div class="container">
+  <div class="sidebar">
+    <h3 class="desktop-only">Orden de marcación</h3>
+    <ol class="desktop-only">
+      <li>Cartílago trirradiado derecho</li>
+      <li>Cartílago trirradiado izquierdo</li>
+      <li>Borde lateral acetábulo D (Perkins)</li>
+      <li>Borde lateral acetábulo I (Perkins)</li>
+      <li>Borde lateral cabeza femoral D</li>
+      <li>Borde medial cabeza femoral D</li>
+      <li>Borde lateral cabeza femoral I</li>
+      <li>Borde medial cabeza femoral I</li>
+    </ol>
+
+    <div class="controls-row">
+      <button id="undoBtn">↩ Deshacer</button>
+      <button id="resetBtn">🗑 Reiniciar</button>
+    </div>
+    
+    <p id="output" style="margin-top: 15px; font-size: 1.2em; color: #d32f2f;"></p>
+  </div>
+
+  <div class="viewer">
+    <canvas id="canvas"></canvas>
+  </div>
+</div>
+
+<footer>
+  Con cariño, Nacho
+</footer>
+
+<script>
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+                || ('ontouchstart' in window) 
+                || navigator.maxTouchPoints > 0;
+
+  const s = document.createElement('script');
+  s.src = (isMobile ? "app-mobile.js" : "app-desktop.js") + "?v=" + Date.now();
+  document.body.appendChild(s);
+</script>
+
+</body>
+</html>
