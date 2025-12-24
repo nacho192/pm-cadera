@@ -10,17 +10,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   
   <style>
-    /* Reset y Estilo Base Oscuro */
     body { 
       font-family: -apple-system, sans-serif; 
       background: #000; 
       margin: 0; 
       color: white; 
       overflow: hidden; 
+      /* Importante: evita que el navegador haga scroll o zoom al tocar */
       touch-action: none; 
     }
 
-    /* Capas de Interfaz (Igual a App Columna) */
     .ui-overlay { position: absolute; width: 100%; z-index: 10; pointer-events: none; }
     
     .top-bar { 
@@ -41,7 +40,7 @@
       pointer-events: auto; 
     }
 
-    /* Contenedor del Canvas */
+    /* Ocupa todo el espacio disponible */
     .viewer { 
       width: 100vw; 
       height: 100vh; 
@@ -49,38 +48,25 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
     }
     
-    canvas { display: block; }
-
-    /* Textos */
-    #output { 
-      font-size: 1.3em; 
-      color: #ffcc00; 
-      font-weight: bold; 
-      text-shadow: 0 2px 4px rgba(0,0,0,0.8); 
-    }
-    
-    #instruction { 
-      font-size: 0.9em; 
-      color: #00aaff; 
-      margin-top: 5px; 
-      font-weight: bold;
+    /* El canvas debe capturar los eventos touch sin restricciones */
+    canvas { 
+      display: block; 
+      touch-action: none; 
+      max-width: 100%;
+      max-height: 100%;
     }
 
-    /* Botones */
+    #output { font-size: 1.3em; color: #ffcc00; font-weight: bold; }
+    #instruction { font-size: 0.9em; color: #00aaff; margin-top: 5px; font-weight: bold; }
+
     button, .upload-btn { 
-      padding: 12px 20px; 
-      border-radius: 10px; 
-      border: none; 
-      background: #333; 
-      color: white; 
-      font-weight: bold; 
-      font-size: 16px; 
-      pointer-events: auto;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+      padding: 12px 20px; border-radius: 10px; border: none; background: #333; 
+      color: white; font-weight: bold; font-size: 16px; pointer-events: auto;
     }
-    .upload-btn { background: #007bff; display: inline-block; cursor: pointer; }
+    .upload-btn { background: #007bff; cursor: pointer; }
     input[type="file"] { display: none; }
 
     .footer-note {
@@ -92,21 +78,16 @@
       color: #666;
       pointer-events: none;
     }
-
-    /* Ocultar elementos de escritorio en móvil */
-    @media (max-width: 768px) {
-      .desktop-only { display: none !important; }
-    }
   </style>
 </head>
 <body>
 
   <div class="ui-overlay top-bar">
-    <div id="output">Esperando radiografía...</div>
-    <div id="instruction">Carga una imagen para medir PM</div>
+    <div id="output">Cargue una imagen</div>
+    <div id="instruction">MARCAR: Cartílago trirradiado derecho</div>
   </div>
 
-  <div class="viewer">
+  <div class="viewer" id="canvasContainer">
     <canvas id="canvas"></canvas>
   </div>
 
@@ -122,13 +103,12 @@
   </div>
 
   <script>
-    // Lógica de detección de dispositivo
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
                 || ('ontouchstart' in window) 
                 || navigator.maxTouchPoints > 0;
 
     const s = document.createElement('script');
-    // Carga el JS dinámicamente
+    // Forzamos la carga del script correcto
     s.src = (isMobile ? "app-mobile.js" : "app-desktop.js") + "?v=" + Date.now();
     document.body.appendChild(s);
   </script>
