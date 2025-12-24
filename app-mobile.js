@@ -26,27 +26,32 @@ const labels = [
   "Borde medial cabeza femoral I°"
 ];
 
-// === 1. CARGA Y OPTIMIZACIÓN DE IMAGEN ===
+// === 1. CARGA DE IMAGEN (Galería + Cámara) ===
 imageInput.addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
+  
   const reader = new FileReader();
   reader.onload = (event) => {
     const tempImg = new Image();
     tempImg.onload = () => {
+      // Optimizamos el tamaño para que el procesamiento sea fluido en móviles
       const MAX_SIZE = 1200;
       let w = tempImg.width;
       let h = tempImg.height;
       const ratio = w / h;
+      
       if (w > h && w > MAX_SIZE) {
         w = MAX_SIZE; h = w / ratio;
       } else if (h > MAX_SIZE) {
         h = MAX_SIZE; w = h * ratio;
       }
+      
       const offCanvas = document.createElement('canvas');
       offCanvas.width = w;
       offCanvas.height = h;
       offCanvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
+      
       img = new Image();
       img.onload = initCanvas;
       img.src = offCanvas.toDataURL('image/jpeg', 0.9);
@@ -58,21 +63,24 @@ imageInput.addEventListener("change", e => {
 
 function initCanvas() {
   const container = canvas.parentElement;
+  // Ajustamos la escala al ancho del dispositivo
   scale = container.clientWidth / img.width;
   const finalW = img.width * scale;
   const finalH = img.height * scale;
-  const dpr = window.devicePixelRatio || 1;
   
+  // Manejo de alta resolución (Retina displays)
+  const dpr = window.devicePixelRatio || 1;
   canvas.width = finalW * dpr;
   canvas.height = finalH * dpr;
   canvas.style.width = finalW + "px";
   canvas.style.height = finalH + "px";
+  
   points = [];
   updateUI();
   draw();
 }
 
-// === 2. LÓGICA DE DIBUJO (PROGRESIVO) ===
+// === 2. LÓGICA DE DIBUJO ===
 function draw() {
   if (!img.src) return;
   const dpr = window.devicePixelRatio || 1;
@@ -85,11 +93,11 @@ function draw() {
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const len = 10000;
 
-    // Hilgenreiner (Azul)
+    // Hilgenreiner (Azul) - Línea horizontal de referencia
     ctx.beginPath();
     ctx.moveTo(p1.x - len, p1.y - (len * dy / dx));
     ctx.lineTo(p1.x + len, p1.y + (len * dy / dx));
-    ctx.strokeStyle = "blue";
+    ctx.strokeStyle = "#00aaff";
     ctx.lineWidth = 2 / scale;
     ctx.stroke();
 
@@ -103,16 +111,18 @@ function draw() {
       ctx.stroke();
     };
 
-    // Perkins (Verde) y Cabeza (Amarillo) - Progresivos
-    if (points.length >= 3) drawPerp(points[2], "green");
-    if (points.length >= 4) drawPerp(points[3], "green");
-    if (points.length >= 5) drawPerp(points[4], "yellow");
+    if (points.length >= 3) drawPerp(points[2], "#00ff44"); // Perkins D
+    if (points.length >= 4) drawPerp(points[3], "#00ff44"); // Perkins I
+    if (points.length >= 5) drawPerp(points[4], "yellow");  // Cabeza D
     if (points.length >= 6) drawPerp(points[5], "yellow");
-    if (points.length >= 7) drawPerp(points[6], "yellow");
+    if (points.length >= 7) drawPerp(points[6], "yellow");  // Cabeza I
     if (points.length >= 8) drawPerp(points[7], "yellow");
   }
 
+  // Dibujar puntos existentes
   points.forEach(p => drawMarker(p, "#00ff00"));
+  
+  // Dibujar punto actual siendo arrastrado
   if (currentPoint) {
     drawMarker(currentPoint, "yellow");
     drawMagnifier(currentPoint);
@@ -120,7 +130,7 @@ function draw() {
 }
 
 function drawMarker(p, color) {
-  const s = 8 / scale;
+  const s = 10 / scale;
   ctx.beginPath();
   ctx.moveTo(p.x - s, p.y); ctx.lineTo(p.x + s, p.y);
   ctx.moveTo(p.x, p.y - s); ctx.lineTo(p.x, p.y + s);
@@ -188,7 +198,7 @@ canvas.addEventListener("touchend", () => {
   draw();
 });
 
-// === 4. CÁLCULO VECTORIAL (Resistente a inclinación) ===
+// === 4. CÁLCULO DE ÍNDICE DE EXTRUSIÓN (PM) ===
 function calculatePM() {
   const dx = points[1].x - points[0].x;
   const dy = points[1].y - points[0].y;
@@ -199,7 +209,7 @@ function calculatePM() {
   const center = (proj(points[0]) + proj(points[1])) / 2;
 
   const getPM = (pIdx, latIdx, medIdx) => {
-    const per = proj(points[pIdx]);
+    const per = proj(points[pIdx]); // Perkins
     const a = proj(points[latIdx]), b = proj(points[medIdx]);
     const lat = Math.abs(a - center) > Math.abs(b - center) ? a : b;
     const med = lat === a ? b : a;
