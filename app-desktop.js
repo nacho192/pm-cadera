@@ -5,15 +5,14 @@ const instruction = document.getElementById("instruction");
 const output = document.getElementById("output");
 const resetBtn = document.getElementById("resetBtn");
 const undoBtn = document.getElementById("undoBtn");
-const sizeSlider = document.getElementById("sizeSlider"); // Nuevo: referencia al slider
+const sizeSlider = document.getElementById("sizeSlider");
 
 let img = new Image();
 let points = [];
 let isDragging = false;
 let dragIdx = -1;
 
-// Tamaño inicial obtenido del slider
-let crossSize = parseInt(sizeSlider.value) || 8; 
+let crossSize = parseInt(sizeSlider.value) || 8;
 let scale = 1;
 let baseScale = 1;
 
@@ -28,10 +27,13 @@ const labels = [
   "Borde medial cabeza femoral izquierda"
 ];
 
-// ================= EVENTO SLIDER =================
+// ================= UTILIDADES =================
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+// ================= SLIDER =================
 sizeSlider.addEventListener("input", () => {
   crossSize = parseInt(sizeSlider.value);
-  draw(); // Redibuja instantáneamente al mover el slider
+  draw();
 });
 
 // ================= INSTRUCCIONES =================
@@ -39,7 +41,7 @@ function updateInstruction() {
   instruction.textContent =
     points.length < labels.length
       ? "Marcar: " + labels[points.length]
-      : "Medición completa";
+      : "Medición completa (válida solo en pelvis AP sin rotación)";
 }
 
 // ================= CARGA IMAGEN =================
@@ -92,9 +94,7 @@ canvas.addEventListener("click", e => {
   const x = (e.clientX - rect.left) / scale;
   const y = (e.clientY - rect.top) / scale;
 
-  const clickedExisting = points.some(p => Math.hypot(p.x - x, p.y - y) < 10 / scale);
-
-  if (!clickedExisting) {
+  if (!points.some(p => Math.hypot(p.x - x, p.y - y) < 10 / scale)) {
     points.push({ x, y });
     updateInstruction();
     draw();
@@ -118,29 +118,27 @@ window.addEventListener("keydown", e => {
   }
 });
 
-if (undoBtn) undoBtn.addEventListener("click", undo);
+undoBtn?.addEventListener("click", undo);
 
 // ================= DIBUJO =================
 function draw() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  
+
   if (img.src) ctx.drawImage(img, 0, 0);
 
-  // Grosor de línea dinámico basado en el slider (mínimo 1.5)
-  const dynamicLineWidth = Math.max(1.5, crossSize / 4);
+  const lw = Math.max(1.5, crossSize / 4);
 
-  // Cruces rojas con tamaño del slider
   points.forEach(p => {
+    const s = crossSize / scale;
     ctx.beginPath();
-    const s = crossSize / scale; 
     ctx.moveTo(p.x - s, p.y);
     ctx.lineTo(p.x + s, p.y);
     ctx.moveTo(p.x, p.y - s);
     ctx.lineTo(p.x, p.y + s);
     ctx.strokeStyle = "red";
-    ctx.lineWidth = dynamicLineWidth / scale;
+    ctx.lineWidth = lw / scale;
     ctx.stroke();
   });
 
@@ -149,63 +147,58 @@ function draw() {
     const dx = h2.x - h1.x, dy = h2.y - h1.y;
     const len = 10000;
 
-    // Hilgenreiner (Azul)
     ctx.beginPath();
     ctx.moveTo(h1.x - dx * len, h1.y - dy * len);
     ctx.lineTo(h1.x + dx * len, h1.y + dy * len);
     ctx.strokeStyle = "blue";
-    ctx.lineWidth = dynamicLineWidth / scale;
+    ctx.lineWidth = lw / scale;
     ctx.stroke();
 
-    const drawVerticalLine = (p, color) => {
+    const drawVertical = (p, color) => {
       const px = -dy, py = dx;
       ctx.beginPath();
       ctx.moveTo(p.x - px * len, p.y - py * len);
       ctx.lineTo(p.x + px * len, p.y + py * len);
       ctx.strokeStyle = color;
-      ctx.lineWidth = dynamicLineWidth / scale;
+      ctx.lineWidth = lw / scale;
       ctx.stroke();
     };
 
-    // Líneas de Perkins (Verde) y Cabeza (Amarillo)
-    if (points.length >= 3) drawVerticalLine(points[2], "green");
-    if (points.length >= 4) drawVerticalLine(points[3], "green");
-    if (points.length >= 5) drawVerticalLine(points[4], "yellow");
-    if (points.length >= 6) drawVerticalLine(points[5], "yellow");
-    if (points.length >= 7) drawVerticalLine(points[6], "yellow");
-    if (points.length >= 8) drawVerticalLine(points[7], "yellow");
+    if (points.length >= 3) drawVertical(points[2], "green");
+    if (points.length >= 4) drawVertical(points[3], "green");
+    for (let i = 4; i < points.length; i++) drawVertical(points[i], "yellow");
   }
 }
 
-// ================= CÁLCULOS =================
+// ================= CÁLCULO PM =================
 function calculatePM() {
   const dx = points[1].x - points[0].x;
   const dy = points[1].y - points[0].y;
   const mag = Math.hypot(dx, dy);
-  const ux = dx / mag, uy = dy / mag;
+  if (mag < 1e-6) return;
 
+  const ux = dx / mag, uy = dy / mag;
   const proj = p => p.x * ux + p.y * uy;
   const center = (proj(points[0]) + proj(points[1])) / 2;
 
-  // Lado Derecho
-  const perR = proj(points[2]);
-  const aR = proj(points[4]);
-  const bR = proj(points[5]);
-  const latR = Math.abs(aR - center) > Math.abs(bR - center) ? aR : bR;
-  const medR = latR === aR ? bR : aR;
-  const pmR = (Math.abs(latR - perR) / Math.abs(latR - medR)) * 100;
+  function computeSide(per, a, b) {
+    const lat = Math.abs(a - center) > Math.abs(b - center) ? a : b;
+    const med = lat === a ? b : a;
+    const denom = Math.abs(lat - med);
+    if (denom < 1e-6) return null;
+    return clamp((Math.abs(lat - per) / denom) * 100, 0, 100);
+  }
 
-  // Lado Izquierdo
-  const perL = proj(points[3]);
-  const aL = proj(points[6]);
-  const bL = proj(points[7]);
-  const latL = Math.abs(aL - center) > Math.abs(bL - center) ? aL : bL;
-  const medL = latL === aL ? bL : aL;
-  const pmL = (Math.abs(latL - perL) / Math.abs(latL - medL)) * 100;
+  const pmR = computeSide(proj(points[2]), proj(points[4]), proj(points[5]));
+  const pmL = computeSide(proj(points[3]), proj(points[6]), proj(points[7]));
 
-  output.innerHTML = `<b>PM Derecho: ${pmR.toFixed(1)}% | PM Izquierdo: ${pmL.toFixed(1)}%</b>`;
+  output.innerHTML =
+    pmR !== null && pmL !== null
+      ? `<b>PM Derecho: ${pmR.toFixed(1)}% | PM Izquierdo: ${pmL.toFixed(1)}%</b>`
+      : "<b>Error de marcación: revisar puntos</b>";
 }
 
+// ================= RESET =================
 function resetAll() {
   points = [];
   output.innerHTML = "";
