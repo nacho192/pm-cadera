@@ -12,7 +12,6 @@ let img = new Image();
 let points = [];
 let currentPoint = null;
 let scale = 1; 
-
 const LUPA_RADIO = 90;
 const LUPA_OFFSET = 140;
 
@@ -27,33 +26,27 @@ const labels = [
   "Borde medial cabeza femoral I°"
 ];
 
-// === 1. CARGA Y PROCESAMIENTO DE IMAGEN (Optimizado para Cámara) ===
+// === 1. CARGA Y OPTIMIZACIÓN DE IMAGEN ===
 imageInput.addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = (event) => {
     const tempImg = new Image();
     tempImg.onload = () => {
-      // Reducimos dimensiones si la foto es masiva (evita errores de memoria en móvil)
       const MAX_SIZE = 1200;
       let w = tempImg.width;
       let h = tempImg.height;
       const ratio = w / h;
-
       if (w > h && w > MAX_SIZE) {
         w = MAX_SIZE; h = w / ratio;
       } else if (h > MAX_SIZE) {
         h = MAX_SIZE; w = h * ratio;
       }
-
-      // Canvas oculto para re-escalar la foto
       const offCanvas = document.createElement('canvas');
       offCanvas.width = w;
       offCanvas.height = h;
       offCanvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
-
       img = new Image();
       img.onload = initCanvas;
       img.src = offCanvas.toDataURL('image/jpeg', 0.9);
@@ -63,91 +56,63 @@ imageInput.addEventListener("change", e => {
   reader.readAsDataURL(file);
 });
 
-// === 2. CONFIGURACIÓN DEL CANVAS (Proporciones estrictas) ===
 function initCanvas() {
   const container = canvas.parentElement;
-  const containerWidth = container.clientWidth;
-  
-  // Escala única basada en ancho para mantener relación de aspecto
-  scale = containerWidth / img.width;
-
+  scale = container.clientWidth / img.width;
   const finalW = img.width * scale;
   const finalH = img.height * scale;
-
   const dpr = window.devicePixelRatio || 1;
+  
   canvas.width = finalW * dpr;
   canvas.height = finalH * dpr;
-
   canvas.style.width = finalW + "px";
   canvas.style.height = finalH + "px";
-
   points = [];
   updateUI();
   draw();
 }
 
-// === 3. LÓGICA DE DIBUJO ===
+// === 2. LÓGICA DE DIBUJO (PROGRESIVO) ===
 function draw() {
   if (!img.src) return;
   const dpr = window.devicePixelRatio || 1;
-  
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
   ctx.clearRect(0, 0, img.width, img.height);
   ctx.drawImage(img, 0, 0);
 
-  // --- DIBUJO DE LÍNEAS (Igual que Desktop) ---
   if (points.length >= 2) {
-    const p1 = points[0];
-    const p2 = points[1];
+    const p1 = points[0], p2 = points[1];
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const len = 10000;
 
-    // 1. Línea de Hilgenreiner (Horizontal entre trirradiados)
+    // Hilgenreiner (Azul)
     ctx.beginPath();
-    // Usamos un valor fijo grande (5000) para asegurar que cruce toda la imagen
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    ctx.moveTo(p1.x - 5000, p1.y - (5000 * dy / dx));
-    ctx.lineTo(p1.x + 5000, p1.y + (5000 * dy / dx));
+    ctx.moveTo(p1.x - len, p1.y - (len * dy / dx));
+    ctx.lineTo(p1.x + len, p1.y + (len * dy / dx));
     ctx.strokeStyle = "blue";
-    ctx.lineWidth = 2 / scale; // Un poco más gruesa para verla bien
+    ctx.lineWidth = 2 / scale;
     ctx.stroke();
 
-    // Función para líneas perpendiculares (Perkins y Cabeza)
     const drawPerp = (p, color) => {
-      if (dx === 0) return; // Evitar error división por cero
-      const m_perp = -dx / dy; 
-      // Si la línea es casi horizontal, la perpendicular es casi vertical
+      const px = -dy, py = dx;
       ctx.beginPath();
-      if (Math.abs(dy) < 0.001) { // Caso Hilgenreiner perfectamente horizontal
-        ctx.moveTo(p.x, p.y - 5000);
-        ctx.lineTo(p.x, p.y + 5000);
-      } else {
-        const factor = 5000;
-        ctx.moveTo(p.x - factor / Math.sqrt(1 + m_perp * m_perp), p.y - m_perp * (factor / Math.sqrt(1 + m_perp * m_perp)));
-        ctx.lineTo(p.x + factor / Math.sqrt(1 + m_perp * m_perp), p.y + m_perp * (factor / Math.sqrt(1 + m_perp * m_perp)));
-      }
+      ctx.moveTo(p.x - px * len, p.y - py * len);
+      ctx.lineTo(p.x + px * len, p.y + py * len);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 1 / scale;
+      ctx.lineWidth = 1.5 / scale;
       ctx.stroke();
     };
 
-    // 2. Perkins (Verde) - Aparecen tras el punto 4
-    if (points.length >= 4) {
-      drawPerp(points[2], "green");
-      drawPerp(points[3], "green");
-    }
-
-    // 3. Bordes Cabeza (Amarillo) - Aparecen al completar los 8 puntos
-    if (points.length >= 8) {
-      drawPerp(points[4], "yellow");
-      drawPerp(points[5], "yellow");
-      drawPerp(points[6], "yellow");
-      drawPerp(points[7], "yellow");
-    }
+    // Perkins (Verde) y Cabeza (Amarillo) - Progresivos
+    if (points.length >= 3) drawPerp(points[2], "green");
+    if (points.length >= 4) drawPerp(points[3], "green");
+    if (points.length >= 5) drawPerp(points[4], "yellow");
+    if (points.length >= 6) drawPerp(points[5], "yellow");
+    if (points.length >= 7) drawPerp(points[6], "yellow");
+    if (points.length >= 8) drawPerp(points[7], "yellow");
   }
 
-  // --- DIBUJO DE CRUCES Y LUPA ---
   points.forEach(p => drawMarker(p, "#00ff00"));
-
   if (currentPoint) {
     drawMarker(currentPoint, "yellow");
     drawMagnifier(currentPoint);
@@ -155,62 +120,49 @@ function draw() {
 }
 
 function drawMarker(p, color) {
-  const s = 6 / scale; // Tamaño visual constante independientemente del zoom
+  const s = 8 / scale;
   ctx.beginPath();
   ctx.moveTo(p.x - s, p.y); ctx.lineTo(p.x + s, p.y);
   ctx.moveTo(p.x, p.y - s); ctx.lineTo(p.x, p.y + s);
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1 / scale;
+  ctx.lineWidth = 2 / scale;
   ctx.stroke();
 }
 
 function drawMagnifier(p) {
   ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset para dibujo nítido de lupa
-  
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   const dpr = window.devicePixelRatio || 1;
   const posX = p.x * scale * dpr;
   const posY = p.y * scale * dpr;
   const lupaY = posY - (LUPA_OFFSET * dpr);
+  const r = LUPA_RADIO * dpr;
 
-  // Círculo de la lupa
   ctx.beginPath();
-  ctx.arc(posX, lupaY, LUPA_RADIO * dpr, 0, Math.PI * 2);
-  ctx.fillStyle = "black";
-  ctx.fill();
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 3 * dpr;
-  ctx.stroke();
+  ctx.arc(posX, lupaY, r, 0, Math.PI * 2);
+  ctx.fillStyle = "black"; ctx.fill();
+  ctx.strokeStyle = "white"; ctx.lineWidth = 3 * dpr; ctx.stroke();
   ctx.clip();
 
-  // Contenido de la lupa (Zoom 2.5x)
   const zoom = 2.5;
-  const r = LUPA_RADIO * dpr;
-  ctx.drawImage(
-    img,
-    p.x - (LUPA_RADIO / scale) / zoom, p.y - (LUPA_RADIO / scale) / zoom,
-    (LUPA_RADIO * 2 / scale) / zoom, (LUPA_RADIO * 2 / scale) / zoom,
-    posX - r, lupaY - r,
-    r * 2, r * 2
+  ctx.drawImage(img, 
+    p.x - (LUPA_RADIO/scale)/zoom, p.y - (LUPA_RADIO/scale)/zoom, 
+    (LUPA_RADIO*2/scale)/zoom, (LUPA_RADIO*2/scale)/zoom, 
+    posX - r, lupaY - r, r * 2, r * 2
   );
 
-  // Cruz central de la lupa
   ctx.beginPath();
   ctx.moveTo(posX - 20, lupaY); ctx.lineTo(posX + 20, lupaY);
   ctx.moveTo(posX, lupaY - 20); ctx.lineTo(posX, lupaY + 20);
-  ctx.strokeStyle = "red";
-  ctx.stroke();
+  ctx.strokeStyle = "red"; ctx.lineWidth = 2; ctx.stroke();
   ctx.restore();
 }
 
-// === 4. GESTIÓN DE EVENTOS TOUCH ===
+// === 3. EVENTOS TOUCH ===
 function getTouchPos(e) {
   const rect = canvas.getBoundingClientRect();
   const t = e.touches[0];
-  return {
-    x: (t.clientX - rect.left) / scale,
-    y: (t.clientY - rect.top) / scale
-  };
+  return { x: (t.clientX - rect.left) / scale, y: (t.clientY - rect.top) / scale };
 }
 
 canvas.addEventListener("touchstart", e => {
@@ -236,40 +188,33 @@ canvas.addEventListener("touchend", () => {
   draw();
 });
 
-// === 5. INTERFAZ Y CÁLCULOS ===
-function updateUI() {
-  if (points.length < labels.length) {
-    instruction.textContent = "MARCAR: " + labels[points.length];
-  } else {
-    instruction.textContent = "✓ MEDICIÓN COMPLETA";
-  }
-}
-
+// === 4. CÁLCULO VECTORIAL (Resistente a inclinación) ===
 function calculatePM() {
-  const p = points;
-  // Cálculo de Porcentaje de Migración de Reimers
-  // Proyectamos las distancias en el eje X de la imagen original
-  const pmD = ((p[4].x - p[2].x) / (p[4].x - p[5].x)) * 100;
-  const pmI = ((p[3].x - p[6].x) / (p[7].x - p[6].x)) * 100;
+  const dx = points[1].x - points[0].x;
+  const dy = points[1].y - points[0].y;
+  const mag = Math.hypot(dx, dy);
+  const ux = dx / mag, uy = dy / mag;
+
+  const proj = p => p.x * ux + p.y * uy;
+  const center = (proj(points[0]) + proj(points[1])) / 2;
+
+  const getPM = (pIdx, latIdx, medIdx) => {
+    const per = proj(points[pIdx]);
+    const a = proj(points[latIdx]), b = proj(points[medIdx]);
+    const lat = Math.abs(a - center) > Math.abs(b - center) ? a : b;
+    const med = lat === a ? b : a;
+    return (Math.abs(lat - per) / Math.abs(lat - med)) * 100;
+  };
+
+  const pmD = getPM(2, 4, 5);
+  const pmI = getPM(3, 6, 7);
   
-  output.innerHTML = `
-    <strong>DERECHA:</strong> ${pmD.toFixed(1)}% <br>
-    <strong>IZQUIERDA:</strong> ${pmI.toFixed(1)}%
-  `;
+  output.innerHTML = `<strong>DERECHA:</strong> ${pmD.toFixed(1)}% | <strong>IZQUIERDA:</strong> ${pmI.toFixed(1)}%`;
 }
 
-// Controles
-undoBtn.onclick = () => {
-  if (points.length > 0) {
-    points.pop();
-    output.innerHTML = "";
-    updateUI();
-    draw();
-  }
-};
+function updateUI() {
+  instruction.textContent = points.length < labels.length ? "MARCAR: " + labels[points.length] : "✓ MEDICIÓN COMPLETA";
+}
 
-resetBtn.onclick = () => {
-  if (confirm("¿Reiniciar toda la medición?")) {
-    location.reload();
-  }
-};
+undoBtn.onclick = () => { if (points.length > 0) { points.pop(); output.innerHTML = ""; updateUI(); draw(); } };
+resetBtn.onclick = () => { if (confirm("¿Reiniciar toda la medición?")) location.reload(); };
