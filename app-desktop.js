@@ -5,14 +5,15 @@ const instruction = document.getElementById("instruction");
 const output = document.getElementById("output");
 const resetBtn = document.getElementById("resetBtn");
 const undoBtn = document.getElementById("undoBtn");
+const sizeSlider = document.getElementById("sizeSlider"); // Nuevo: referencia al slider
 
 let img = new Image();
 let points = [];
 let isDragging = false;
 let dragIdx = -1;
 
-const CROSS_SIZE = 6;
-const LINE_WIDTH = 1.5;
+// Tamaño inicial obtenido del slider
+let crossSize = parseInt(sizeSlider.value) || 8; 
 let scale = 1;
 let baseScale = 1;
 
@@ -26,6 +27,12 @@ const labels = [
   "Borde lateral cabeza femoral izquierda",
   "Borde medial cabeza femoral izquierda"
 ];
+
+// ================= EVENTO SLIDER =================
+sizeSlider.addEventListener("input", () => {
+  crossSize = parseInt(sizeSlider.value);
+  draw(); // Redibuja instantáneamente al mover el slider
+});
 
 // ================= INSTRUCCIONES =================
 function updateInstruction() {
@@ -121,15 +128,19 @@ function draw() {
   
   if (img.src) ctx.drawImage(img, 0, 0);
 
-  // Cruces rojas
+  // Grosor de línea dinámico basado en el slider (mínimo 1.5)
+  const dynamicLineWidth = Math.max(1.5, crossSize / 4);
+
+  // Cruces rojas con tamaño del slider
   points.forEach(p => {
     ctx.beginPath();
-    ctx.moveTo(p.x - CROSS_SIZE / scale, p.y);
-    ctx.lineTo(p.x + CROSS_SIZE / scale, p.y);
-    ctx.moveTo(p.x, p.y - CROSS_SIZE / scale);
-    ctx.lineTo(p.x, p.y + CROSS_SIZE / scale);
+    const s = crossSize / scale; 
+    ctx.moveTo(p.x - s, p.y);
+    ctx.lineTo(p.x + s, p.y);
+    ctx.moveTo(p.x, p.y - s);
+    ctx.lineTo(p.x, p.y + s);
     ctx.strokeStyle = "red";
-    ctx.lineWidth = LINE_WIDTH / scale;
+    ctx.lineWidth = dynamicLineWidth / scale;
     ctx.stroke();
   });
 
@@ -143,7 +154,7 @@ function draw() {
     ctx.moveTo(h1.x - dx * len, h1.y - dy * len);
     ctx.lineTo(h1.x + dx * len, h1.y + dy * len);
     ctx.strokeStyle = "blue";
-    ctx.lineWidth = LINE_WIDTH / scale;
+    ctx.lineWidth = dynamicLineWidth / scale;
     ctx.stroke();
 
     const drawVerticalLine = (p, color) => {
@@ -152,15 +163,13 @@ function draw() {
       ctx.moveTo(p.x - px * len, p.y - py * len);
       ctx.lineTo(p.x + px * len, p.y + py * len);
       ctx.strokeStyle = color;
-      ctx.lineWidth = LINE_WIDTH / scale;
+      ctx.lineWidth = dynamicLineWidth / scale;
       ctx.stroke();
     };
 
-    // Líneas de Perkins (Verde)
+    // Líneas de Perkins (Verde) y Cabeza (Amarillo)
     if (points.length >= 3) drawVerticalLine(points[2], "green");
     if (points.length >= 4) drawVerticalLine(points[3], "green");
-
-    // Líneas Cabeza Femoral (Amarillo)
     if (points.length >= 5) drawVerticalLine(points[4], "yellow");
     if (points.length >= 6) drawVerticalLine(points[5], "yellow");
     if (points.length >= 7) drawVerticalLine(points[6], "yellow");
@@ -170,11 +179,12 @@ function draw() {
 
 // ================= CÁLCULOS =================
 function calculatePM() {
-  const u = { x: (points[1].x - points[0].x), y: (points[1].y - points[0].y) };
-  const mag = Math.hypot(u.x, u.y);
-  u.x /= mag; u.y /= mag;
+  const dx = points[1].x - points[0].x;
+  const dy = points[1].y - points[0].y;
+  const mag = Math.hypot(dx, dy);
+  const ux = dx / mag, uy = dy / mag;
 
-  const proj = p => p.x * u.x + p.y * u.y;
+  const proj = p => p.x * ux + p.y * uy;
   const center = (proj(points[0]) + proj(points[1])) / 2;
 
   // Lado Derecho

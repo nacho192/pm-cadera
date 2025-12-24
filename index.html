@@ -7,6 +7,23 @@
   <meta name="theme-color" content="#0066cc">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Asegura que los elementos desktop-only se oculten en móviles */
+    @media (max-width: 768px) {
+      .desktop-only {
+        display: none !important;
+      }
+    }
+    
+    /* Estilo básico para el contenedor del slider */
+    .slider-container {
+      margin-bottom: 15px; 
+      background: #f0f4f8; 
+      padding: 10px; 
+      border-radius: 8px;
+      border: 1px solid #d1d9e0;
+    }
+  </style>
 </head>
 <body>
 
@@ -32,6 +49,13 @@
       <li>Borde medial cabeza femoral I</li>
     </ol>
 
+    <div class="desktop-only slider-container">
+      <label for="sizeSlider" style="display: block; font-size: 0.9em; margin-bottom: 5px; color: #333; font-weight: bold;">
+        Tamaño de marcas:
+      </label>
+      <input type="range" id="sizeSlider" min="4" max="25" value="8" style="width: 100%; cursor: pointer;">
+    </div>
+
     <div class="controls-row">
       <button id="undoBtn">↩ Deshacer</button>
       <button id="resetBtn">🗑 Reiniciar</button>
@@ -50,11 +74,13 @@
 </footer>
 
 <script>
+  // Detectar dispositivo para cargar el script correspondiente
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
                 || ('ontouchstart' in window) 
                 || navigator.maxTouchPoints > 0;
 
   const s = document.createElement('script');
+  // Se añade un timestamp para evitar problemas de caché al actualizar los archivos JS
   s.src = (isMobile ? "app-mobile.js" : "app-desktop.js") + "?v=" + Date.now();
   document.body.appendChild(s);
 </script>
