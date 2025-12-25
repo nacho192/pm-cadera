@@ -10,7 +10,8 @@ const undoBtn = document.getElementById("undoBtn");
 // === Estado de la Aplicación ===
 let img = new Image();
 let points = [];
-let draggingIdx = -1; // Índice del punto que estamos moviendo
+let draggingIdx = -1; 
+let isDraggingLine = false; // Nueva bandera para detectar si movemos la línea completa
 let currentPoint = null; 
 let scale = 1; 
 const LUPA_RADIO = 90;
@@ -40,7 +41,6 @@ imageInput.addEventListener("change", e => {
       const ratio = w / h;
       if (w > h && w > MAX_SIZE) { w = MAX_SIZE; h = w / ratio; }
       else if (h > MAX_SIZE) { h = MAX_SIZE; w = h * ratio; }
-      
       const offCanvas = document.createElement('canvas');
       offCanvas.width = w; offCanvas.height = h;
       offCanvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
@@ -66,34 +66,42 @@ function initCanvas() {
   draw();
 }
 
-// === 2. EVENTOS TOUCH CORREGIDOS (PARA AJUSTE) ===
+// === 2. LÓGICA DE EVENTOS (MOVIMIENTO X) ===
 function getTouchPos(touch) {
   const rect = canvas.getBoundingClientRect();
-  // Calculamos la posición relativa al canvas escalado
-  return { 
-    x: (touch.clientX - rect.left) / scale, 
-    y: (touch.clientY - rect.top) / scale 
-  };
+  return { x: (touch.clientX - rect.left) / scale, y: (touch.clientY - rect.top) / scale };
 }
 
 canvas.addEventListener("touchstart", e => {
   if (!img.src) return;
   e.preventDefault();
   const pos = getTouchPos(e.touches[0]);
-  
-  // 1. ¿Estamos tocando un punto existente? (Radio de 30px para facilidad)
-  const hitRadius = 30 / scale;
-  draggingIdx = points.findIndex(p => Math.hypot(p.x - pos.x, p.y - pos.y) < hitRadius);
+  const hitRadius = 35 / scale;
 
-  // 2. Si no tocamos uno y hay espacio, creamos uno nuevo
+  // 1. Prioridad: ¿Tocamos un punto?
+  draggingIdx = points.findIndex(p => Math.hypot(p.x - pos.x, p.y - pos.y) < hitRadius);
+  
+  // 2. Si ya hay 8 puntos y no tocamos un nodo, ver si tocamos cerca de una línea vertical (eje X)
+  if (draggingIdx === -1 && points.length === 8) {
+      // Buscamos cuál línea vertical está más cerca del dedo en X
+      for (let i = 2; i < 8; i++) {
+          if (Math.abs(pos.x - points[i].x) < hitRadius) {
+              draggingIdx = i;
+              isDraggingLine = true;
+              break;
+          }
+      }
+  }
+
+  // 3. Crear nuevo si falta
   if (draggingIdx === -1 && points.length < labels.length) {
     points.push(pos);
     draggingIdx = points.length - 1;
-    updateUI();
   }
   
   if (draggingIdx !== -1) {
     currentPoint = points[draggingIdx];
+    updateUI();
     draw();
   }
 }, { passive: false });
@@ -102,19 +110,28 @@ canvas.addEventListener("touchmove", e => {
   if (draggingIdx === -1) return;
   e.preventDefault();
   const pos = getTouchPos(e.touches[0]);
-  points[draggingIdx] = pos; // Actualizamos el punto en tiempo real
-  currentPoint = pos;
+
+  if (isDraggingLine || draggingIdx >= 2) {
+      // Mover solo en el eje X para las líneas verticales
+      points[draggingIdx].x = pos.x;
+  } else {
+      // Los puntos del cartílago (0 y 1) se mueven libremente
+      points[draggingIdx] = pos;
+  }
+  
+  currentPoint = points[draggingIdx];
   draw();
 }, { passive: false });
 
 canvas.addEventListener("touchend", () => {
-  if (draggingIdx !== -1 && points.length === labels.length) calculatePM();
+  if (points.length === labels.length) calculatePM();
   draggingIdx = -1;
+  isDraggingLine = false;
   currentPoint = null;
   draw();
 });
 
-// === 3. DIBUJO Y CÁLCULOS (SIN CAMBIOS MÉDICOS) ===
+// === 3. DIBUJO Y CÁLCULOS ===
 function draw() {
   if (!img.src) return;
   const dpr = window.devicePixelRatio || 1;
@@ -126,6 +143,8 @@ function draw() {
     const p1 = points[0], p2 = points[1];
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const len = 10000;
+
+    // Hilgenreiner (Azul)
     ctx.beginPath();
     ctx.moveTo(p1.x - len, p1.y - (len * dy / dx));
     ctx.lineTo(p1.x + len, p1.y + (len * dy / dx));
@@ -136,7 +155,7 @@ function draw() {
       ctx.beginPath();
       ctx.moveTo(p.x - px * len, p.y - py * len);
       ctx.lineTo(p.x + px * len, p.y + py * len);
-      ctx.strokeStyle = color; ctx.lineWidth = 1.5 / scale; ctx.stroke();
+      ctx.strokeStyle = color; ctx.lineWidth = 2 / scale; ctx.stroke();
     };
 
     if (points.length >= 3) drawPerp(points[2], "#00ff44");
@@ -149,37 +168,25 @@ function draw() {
 }
 
 function drawMarker(p, color) {
-  const s = 10 / scale;
+  const s = 12 / scale;
   ctx.beginPath();
   ctx.moveTo(p.x - s, p.y); ctx.lineTo(p.x + s, p.y);
   ctx.moveTo(p.x, p.y - s); ctx.lineTo(p.x, p.y + s);
-  ctx.strokeStyle = color; ctx.lineWidth = 2 / scale; ctx.stroke();
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5 / scale; ctx.stroke();
 }
 
 function drawMagnifier(p) {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const dpr = window.devicePixelRatio || 1;
-  const posX = p.x * scale * dpr;
-  const posY = p.y * scale * dpr;
-  const lupaY = posY - (LUPA_OFFSET * dpr);
-  const r = LUPA_RADIO * dpr;
-
-  ctx.beginPath();
-  ctx.arc(posX, lupaY, r, 0, Math.PI * 2);
-  ctx.fillStyle = "black"; ctx.fill();
-  ctx.strokeStyle = "white"; ctx.lineWidth = 3 * dpr; ctx.stroke();
+  const posX = p.x * scale * dpr, posY = p.y * scale * dpr;
+  const lupaY = posY - (LUPA_OFFSET * dpr), r = LUPA_RADIO * dpr;
+  ctx.beginPath(); ctx.arc(posX, lupaY, r, 0, Math.PI * 2);
+  ctx.fillStyle = "black"; ctx.fill(); ctx.strokeStyle = "white"; ctx.lineWidth = 3 * dpr; ctx.stroke();
   ctx.clip();
-
   const zoom = 2.5;
-  ctx.drawImage(img, 
-    p.x - (LUPA_RADIO/scale)/zoom, p.y - (LUPA_RADIO/scale)/zoom, 
-    (LUPA_RADIO*2/scale)/zoom, (LUPA_RADIO*2/scale)/zoom, 
-    posX - r, lupaY - r, r * 2, r * 2
-  );
-
-  ctx.beginPath();
-  ctx.strokeStyle = "red"; ctx.lineWidth = 2;
+  ctx.drawImage(img, p.x - (LUPA_RADIO/scale)/zoom, p.y - (LUPA_RADIO/scale)/zoom, (LUPA_RADIO*2/scale)/zoom, (LUPA_RADIO*2/scale)/zoom, posX - r, lupaY - r, r * 2, r * 2);
+  ctx.beginPath(); ctx.strokeStyle = "red"; ctx.lineWidth = 2;
   ctx.moveTo(posX - 20, lupaY); ctx.lineTo(posX + 20, lupaY);
   ctx.moveTo(posX, lupaY - 20); ctx.lineTo(posX, lupaY + 20);
   ctx.stroke(); ctx.restore();
@@ -201,7 +208,7 @@ function calculatePM() {
 }
 
 function updateUI() {
-  instruction.textContent = points.length < labels.length ? "MARCAR: " + labels[points.length] : "✓ AJUSTE DISPONIBLE";
+  instruction.textContent = points.length < labels.length ? "MARCAR: " + labels[points.length] : "✓ DESLICE LÍNEAS PARA AJUSTAR";
 }
 
 undoBtn.onclick = () => { points.pop(); output.innerHTML = ""; updateUI(); draw(); };
