@@ -11,7 +11,7 @@ const undoBtn = document.getElementById("undoBtn");
 let img = new Image();
 let points = [];
 let draggingIdx = -1; 
-let isDraggingLine = false; // Nueva bandera para detectar si movemos la línea completa
+let isDraggingLine = false;
 let currentPoint = null; 
 let scale = 1; 
 const LUPA_RADIO = 90;
@@ -28,7 +28,7 @@ const labels = [
   "Borde medial cabeza femoral I°"
 ];
 
-// === 1. CARGA DE IMAGEN ===
+// === 1. CARGA DE IMAGEN (Galería + Cámara) ===
 imageInput.addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -78,12 +78,9 @@ canvas.addEventListener("touchstart", e => {
   const pos = getTouchPos(e.touches[0]);
   const hitRadius = 35 / scale;
 
-  // 1. Prioridad: ¿Tocamos un punto?
   draggingIdx = points.findIndex(p => Math.hypot(p.x - pos.x, p.y - pos.y) < hitRadius);
   
-  // 2. Si ya hay 8 puntos y no tocamos un nodo, ver si tocamos cerca de una línea vertical (eje X)
   if (draggingIdx === -1 && points.length === 8) {
-      // Buscamos cuál línea vertical está más cerca del dedo en X
       for (let i = 2; i < 8; i++) {
           if (Math.abs(pos.x - points[i].x) < hitRadius) {
               draggingIdx = i;
@@ -93,7 +90,6 @@ canvas.addEventListener("touchstart", e => {
       }
   }
 
-  // 3. Crear nuevo si falta
   if (draggingIdx === -1 && points.length < labels.length) {
     points.push(pos);
     draggingIdx = points.length - 1;
@@ -112,10 +108,8 @@ canvas.addEventListener("touchmove", e => {
   const pos = getTouchPos(e.touches[0]);
 
   if (isDraggingLine || draggingIdx >= 2) {
-      // Mover solo en el eje X para las líneas verticales
       points[draggingIdx].x = pos.x;
   } else {
-      // Los puntos del cartílago (0 y 1) se mueven libremente
       points[draggingIdx] = pos;
   }
   
@@ -131,7 +125,36 @@ canvas.addEventListener("touchend", () => {
   draw();
 });
 
-// === 3. DIBUJO Y CÁLCULOS ===
+// === 3. DIBUJO Y RENDERIZADO MÉDICO ===
+function renderMedicalLines(targetCtx, internalScale) {
+  if (points.length < 2) return;
+  const p1 = points[0], p2 = points[1];
+  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  const len = 10000;
+
+  // Hilgenreiner (Azul)
+  targetCtx.beginPath();
+  targetCtx.moveTo(p1.x - len, p1.y - (len * dy / dx));
+  targetCtx.lineTo(p1.x + len, p1.y + (len * dy / dx));
+  targetCtx.strokeStyle = "#00aaff"; 
+  targetCtx.lineWidth = (2 / scale) / internalScale; 
+  targetCtx.stroke();
+
+  const drawPerp = (p, color) => {
+    const px = -dy, py = dx;
+    targetCtx.beginPath();
+    targetCtx.moveTo(p.x - px * len, p.y - py * len);
+    targetCtx.lineTo(p.x + px * len, p.y + py * len);
+    targetCtx.strokeStyle = color; 
+    targetCtx.lineWidth = (2 / scale) / internalScale; 
+    targetCtx.stroke();
+  };
+
+  if (points.length >= 3) drawPerp(points[2], "#00ff44");
+  if (points.length >= 4) drawPerp(points[3], "#00ff44");
+  [4,5,6,7].forEach(i => { if(points[i]) drawPerp(points[i], "yellow"); });
+}
+
 function draw() {
   if (!img.src) return;
   const dpr = window.devicePixelRatio || 1;
@@ -139,29 +162,7 @@ function draw() {
   ctx.clearRect(0, 0, img.width, img.height);
   ctx.drawImage(img, 0, 0);
 
-  if (points.length >= 2) {
-    const p1 = points[0], p2 = points[1];
-    const dx = p2.x - p1.x, dy = p2.y - p1.y;
-    const len = 10000;
-
-    // Hilgenreiner (Azul)
-    ctx.beginPath();
-    ctx.moveTo(p1.x - len, p1.y - (len * dy / dx));
-    ctx.lineTo(p1.x + len, p1.y + (len * dy / dx));
-    ctx.strokeStyle = "#00aaff"; ctx.lineWidth = 2 / scale; ctx.stroke();
-
-    const drawPerp = (p, color) => {
-      const px = -dy, py = dx;
-      ctx.beginPath();
-      ctx.moveTo(p.x - px * len, p.y - py * len);
-      ctx.lineTo(p.x + px * len, p.y + py * len);
-      ctx.strokeStyle = color; ctx.lineWidth = 2 / scale; ctx.stroke();
-    };
-
-    if (points.length >= 3) drawPerp(points[2], "#00ff44");
-    if (points.length >= 4) drawPerp(points[3], "#00ff44");
-    [4,5,6,7].forEach(i => { if(points[i]) drawPerp(points[i], "yellow"); });
-  }
+  renderMedicalLines(ctx, 1);
 
   points.forEach((p, i) => drawMarker(p, i === draggingIdx ? "yellow" : "#00ff00"));
   if (currentPoint) drawMagnifier(currentPoint);
@@ -176,19 +177,35 @@ function drawMarker(p, color) {
 }
 
 function drawMagnifier(p) {
+  const dpr = window.devicePixelRatio || 1;
+  const zoom = 2.5;
+  const r = LUPA_RADIO * dpr;
+  const posX = p.x * scale * dpr;
+  const posY = p.y * scale * dpr;
+  const lupaY = posY - (LUPA_OFFSET * dpr);
+
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  const dpr = window.devicePixelRatio || 1;
-  const posX = p.x * scale * dpr, posY = p.y * scale * dpr;
-  const lupaY = posY - (LUPA_OFFSET * dpr), r = LUPA_RADIO * dpr;
-  ctx.beginPath(); ctx.arc(posX, lupaY, r, 0, Math.PI * 2);
-  ctx.fillStyle = "black"; ctx.fill(); ctx.strokeStyle = "white"; ctx.lineWidth = 3 * dpr; ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(posX, lupaY, r, 0, Math.PI * 2);
+  ctx.fillStyle = "black"; ctx.fill();
+  ctx.strokeStyle = "white"; ctx.lineWidth = 3 * dpr; ctx.stroke();
   ctx.clip();
-  const zoom = 2.5;
-  ctx.drawImage(img, p.x - (LUPA_RADIO/scale)/zoom, p.y - (LUPA_RADIO/scale)/zoom, (LUPA_RADIO*2/scale)/zoom, (LUPA_RADIO*2/scale)/zoom, posX - r, lupaY - r, r * 2, r * 2);
+
+  ctx.translate(posX, lupaY);
+  ctx.scale(zoom * scale * dpr, zoom * scale * dpr);
+  ctx.translate(-p.x, -p.y);
+  ctx.drawImage(img, 0, 0);
+
+  renderMedicalLines(ctx, zoom);
+  ctx.restore();
+
+  // Cruz roja central
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.beginPath(); ctx.strokeStyle = "red"; ctx.lineWidth = 2;
-  ctx.moveTo(posX - 20, lupaY); ctx.lineTo(posX + 20, lupaY);
-  ctx.moveTo(posX, lupaY - 20); ctx.lineTo(posX, lupaY + 20);
+  ctx.moveTo(posX - 15, lupaY); ctx.lineTo(posX + 15, lupaY);
+  ctx.moveTo(posX, lupaY - 15); ctx.lineTo(posX, lupaY + 15);
   ctx.stroke(); ctx.restore();
 }
 
