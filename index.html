@@ -2,116 +2,88 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Cobb Pro - PM Caderas</title>
+  <title>PM Caderas</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/png" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#0066cc">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  
+  <link rel="stylesheet" href="style.css" />
   <style>
-    body { 
-      font-family: -apple-system, sans-serif; 
-      background: #000; 
-      margin: 0; 
-      color: white; 
-      overflow: hidden; 
-      /* Importante: evita que el navegador haga scroll o zoom al tocar */
-      touch-action: none; 
-    }
-
-    .ui-overlay { position: absolute; width: 100%; z-index: 10; pointer-events: none; }
-    
-    .top-bar { 
-      top: 0; 
-      background: rgba(20, 20, 20, 0.8); 
-      padding: 15px; 
-      text-align: center; 
-      border-bottom: 1px solid #333;
-    }
-
-    .bottom-bar { 
-      bottom: 0; 
-      background: rgba(20, 20, 20, 0.9); 
-      padding: 20px; 
-      display: flex; 
-      justify-content: center; 
-      gap: 15px; 
-      pointer-events: auto; 
-    }
-
-    /* Ocupa todo el espacio disponible */
-    .viewer { 
-      width: 100vw; 
-      height: 100vh; 
-      background: #000; 
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
+    /* Asegura que los elementos desktop-only se oculten en móviles */
+    @media (max-width: 768px) {
+      .desktop-only {
+        display: none !important;
+      }
     }
     
-    /* El canvas debe capturar los eventos touch sin restricciones */
-    canvas { 
-      display: block; 
-      touch-action: none; 
-      max-width: 100%;
-      max-height: 100%;
-    }
-
-    #output { font-size: 1.3em; color: #ffcc00; font-weight: bold; }
-    #instruction { font-size: 0.9em; color: #00aaff; margin-top: 5px; font-weight: bold; }
-
-    button, .upload-btn { 
-      padding: 12px 20px; border-radius: 10px; border: none; background: #333; 
-      color: white; font-weight: bold; font-size: 16px; pointer-events: auto;
-    }
-    .upload-btn { background: #007bff; cursor: pointer; }
-    input[type="file"] { display: none; }
-
-    .footer-note {
-      position: absolute;
-      bottom: 85px;
-      width: 100%;
-      text-align: center;
-      font-size: 0.7em;
-      color: #666;
-      pointer-events: none;
+    /* Estilo básico para el contenedor del slider */
+    .slider-container {
+      margin-bottom: 15px; 
+      background: #f0f4f8; 
+      padding: 10px; 
+      border-radius: 8px;
+      border: 1px solid #d1d9e0;
     }
   </style>
 </head>
 <body>
 
-  <div class="ui-overlay top-bar">
-    <div id="output">Cargue una imagen</div>
-    <div id="instruction">MARCAR: Cartílago trirradiado derecho</div>
+<h2>Medición de PM de Cadera</h2>
+
+<p id="instruction" style="font-weight: bold; color: #0066cc; font-size: 1.1em; text-align: center; margin-bottom: 10px;"></p>
+
+<div style="padding: 10px; text-align: center;">
+  <input type="file" id="imageInput" accept="image/*" capture="environment" />
+</div>
+
+<div class="container">
+  <div class="sidebar">
+    <h3 class="desktop-only">Orden de marcación</h3>
+    <ol class="desktop-only">
+      <li>Cartílago trirradiado derecho</li>
+      <li>Cartílago trirradiado izquierdo</li>
+      <li>Borde lateral acetábulo D (Perkins)</li>
+      <li>Borde lateral acetábulo I (Perkins)</li>
+      <li>Borde lateral cabeza femoral D</li>
+      <li>Borde medial cabeza femoral D</li>
+      <li>Borde lateral cabeza femoral I</li>
+      <li>Borde medial cabeza femoral I</li>
+    </ol>
+
+    <div class="desktop-only slider-container">
+      <label for="sizeSlider" style="display: block; font-size: 0.9em; margin-bottom: 5px; color: #333; font-weight: bold;">
+        Tamaño de marcas:
+      </label>
+      <input type="range" id="sizeSlider" min="4" max="25" value="8" style="width: 100%; cursor: pointer;">
+    </div>
+
+    <div class="controls-row">
+      <button id="undoBtn">↩ Deshacer</button>
+      <button id="resetBtn">🗑 Reiniciar</button>
+    </div>
+    
+    <p id="output" style="margin-top: 15px; font-size: 1.2em; color: #d32f2f;"></p>
   </div>
 
-  <div class="viewer" id="canvasContainer">
+  <div class="viewer">
     <canvas id="canvas"></canvas>
   </div>
+</div>
 
-  <div class="footer-note">Con cariño, Nacho</div>
+<footer>
+  Con cariño, Nacho
+</footer>
 
-  <div class="ui-overlay bottom-bar">
-    <label class="upload-btn">
-      📁 Abrir
-      <input type="file" id="imageInput" accept="image/*">
-    </label>
-    <button id="undoBtn">↩️</button>
-    <button id="resetBtn">🗑️</button>
-  </div>
-
-  <script>
-    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+<script>
+  // Detectar dispositivo para cargar el script correspondiente
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
                 || ('ontouchstart' in window) 
                 || navigator.maxTouchPoints > 0;
 
-    const s = document.createElement('script');
-    // Forzamos la carga del script correcto
-    s.src = (isMobile ? "app-mobile.js" : "app-desktop.js") + "?v=" + Date.now();
-    document.body.appendChild(s);
-  </script>
+  const s = document.createElement('script');
+  // Se añade un timestamp para evitar problemas de caché al actualizar los archivos JS
+  s.src = (isMobile ? "app-mobile.js" : "app-desktop.js") + "?v=" + Date.now();
+  document.body.appendChild(s);
+</script>
 
 </body>
 </html>
