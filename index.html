@@ -73,13 +73,14 @@
 </footer>
 
 <script>
-  const isMobile =
+const isMobile =
     /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ||
     ('ontouchstart' in window) ||
     navigator.maxTouchPoints > 0;
 
   const s = document.createElement("script");
-  s.src = (isMobile ? "app-mobile.js" : "app-desktop.js") + "?v=" + Date.now();
+  // Cambiamos Date.now() por una versión fija para forzar la actualización real en el móvil
+  s.src = (isMobile ? "app-mobile.js" : "app-desktop.js") + "?v=2.1";
   document.body.appendChild(s);
 </script>
 

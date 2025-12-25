@@ -1,9 +1,9 @@
 // === Elementos del DOM ===
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-const imageInput = document.getElementById("imageInput"); // original
-const cameraInput = document.getElementById("cameraInput"); // NUEVO
-const fileInput = document.getElementById("fileInput");     // NUEVO
+const imageInput = document.getElementById("imageInput");
+const cameraInput = document.getElementById("cameraInput");
+const fileInput = document.getElementById("fileInput");
 const instruction = document.getElementById("instruction");
 const output = document.getElementById("output");
 const resetBtn = document.getElementById("resetBtn");
@@ -30,10 +30,9 @@ const labels = [
   "Borde medial cabeza femoral I°"
 ];
 
-// === 1. CARGA DE IMAGEN (LÓGICA ORIGINAL, SIN CAMBIOS) ===
+// === 1. CARGA DE IMAGEN ===
 function processImageFile(file) {
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = (event) => {
     const tempImg = new Image();
@@ -41,20 +40,11 @@ function processImageFile(file) {
       const MAX_SIZE = 1200;
       let w = tempImg.width, h = tempImg.height;
       const ratio = w / h;
-
-      if (w > h && w > MAX_SIZE) { 
-        w = MAX_SIZE; 
-        h = w / ratio; 
-      } else if (h > MAX_SIZE) { 
-        h = MAX_SIZE; 
-        w = h * ratio; 
-      }
-
+      if (w > h && w > MAX_SIZE) { w = MAX_SIZE; h = w / ratio; }
+      else if (h > MAX_SIZE) { h = MAX_SIZE; w = h * ratio; }
       const offCanvas = document.createElement('canvas');
-      offCanvas.width = w;
-      offCanvas.height = h;
+      offCanvas.width = w; offCanvas.height = h;
       offCanvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
-
       img = new Image();
       img.onload = initCanvas;
       img.src = offCanvas.toDataURL('image/jpeg', 0.9);
@@ -64,37 +54,26 @@ function processImageFile(file) {
   reader.readAsDataURL(file);
 }
 
-// === LISTENER ORIGINAL (SE MANTIENE) ===
-imageInput?.addEventListener("change", e => {
-  processImageFile(e.target.files[0]);
-});
+imageInput?.addEventListener("change", e => processImageFile(e.target.files[0]));
+cameraInput?.addEventListener("change", e => processImageFile(e.target.files[0]));
+fileInput?.addEventListener("change", e => processImageFile(e.target.files[0]));
 
-// === NUEVOS LISTENERS (ÚNICA ADICIÓN REAL) ===
-cameraInput?.addEventListener("change", e => {
-  processImageFile(e.target.files[0]);
-});
-
-fileInput?.addEventListener("change", e => {
-  processImageFile(e.target.files[0]);
-});
-
-// === 2. INICIALIZACIÓN CANVAS (ORIGINAL) ===
+// === 2. INICIALIZACIÓN CANVAS ===
 function initCanvas() {
   const container = canvas.parentElement;
   scale = container.clientWidth / img.width;
   const dpr = window.devicePixelRatio || 1;
-
   canvas.width = (img.width * scale) * dpr;
   canvas.height = (img.height * scale) * dpr;
   canvas.style.width = (img.width * scale) + "px";
   canvas.style.height = (img.height * scale) + "px";
-
   points = [];
   updateUI();
   draw();
 }
 
-// === 3. EVENTOS TÁCTILES (ORIGINAL COMPLETO) ===
+// === 3. EVENTOS TÁCTILES CORREGIDOS ===
+// === 3. EVENTOS TÁCTILES (CORREGIDO PARA MOVIMIENTO Y + LUPA) ===
 function getTouchPos(touch) {
   const rect = canvas.getBoundingClientRect();
   return {
@@ -108,25 +87,29 @@ canvas.addEventListener("touchstart", e => {
   e.preventDefault();
 
   const pos = getTouchPos(e.touches[0]);
-  const hitRadius = 35 / scale;
+  // Aumentamos el radio de contacto para mejor usabilidad táctil
+  const hitRadius = 45 / scale; 
 
   draggingIdx = points.findIndex(
     p => Math.hypot(p.x - pos.x, p.y - pos.y) < hitRadius
   );
 
+  // Si ya hay 8 puntos, permitimos seleccionar líneas para ajuste fino
   if (draggingIdx === -1 && points.length === 8) {
     for (let i = 2; i < 8; i++) {
       if (Math.abs(pos.x - points[i].x) < hitRadius) {
         draggingIdx = i;
-        isDraggingLine = true;
+        isDraggingLine = true; // Aquí sí bloquearemos el eje Y después
         break;
       }
     }
   }
 
+  // Si no hemos tocado nada y faltan puntos, creamos uno nuevo
   if (draggingIdx === -1 && points.length < labels.length) {
     points.push(pos);
     draggingIdx = points.length - 1;
+    isDraggingLine = false; // Al crear, el movimiento debe ser LIBRE (X e Y)
   }
 
   if (draggingIdx !== -1) {
@@ -142,9 +125,11 @@ canvas.addEventListener("touchmove", e => {
 
   const pos = getTouchPos(e.touches[0]);
 
-  if (isDraggingLine || draggingIdx >= 2) {
+  // CAMBIO CLAVE: Solo bloqueamos Y si explícitamente estamos ajustando una línea terminada
+  if (isDraggingLine) {
     points[draggingIdx].x = pos.x;
   } else {
+    // Esto permite que el punto y la LUPA suban y bajen con tu dedo
     points[draggingIdx] = pos;
   }
 
@@ -160,10 +145,9 @@ canvas.addEventListener("touchend", () => {
   draw();
 });
 
-// === 4. RENDER MÉDICO (ORIGINAL ÍNTEGRO) ===
+// === 4. RENDERIZADO (Líneas en Lupa) ===
 function renderMedicalLines(targetCtx, internalScale) {
   if (points.length < 2) return;
-
   const p1 = points[0], p2 = points[1];
   const dx = p2.x - p1.x, dy = p2.y - p1.y;
   const len = 10000;
@@ -192,37 +176,27 @@ function renderMedicalLines(targetCtx, internalScale) {
 
 function draw() {
   if (!img.src) return;
-
   const dpr = window.devicePixelRatio || 1;
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
   ctx.clearRect(0, 0, img.width, img.height);
   ctx.drawImage(img, 0, 0);
-
   renderMedicalLines(ctx, 1);
-  points.forEach((p, i) =>
-    drawMarker(p, i === draggingIdx ? "yellow" : "#00ff00")
-  );
-
+  points.forEach((p, i) => drawMarker(p, i === draggingIdx ? "yellow" : "#00ff00"));
   if (currentPoint) drawMagnifier(currentPoint);
 }
 
 function drawMarker(p, color) {
   const s = 12 / scale;
   ctx.beginPath();
-  ctx.moveTo(p.x - s, p.y);
-  ctx.lineTo(p.x + s, p.y);
-  ctx.moveTo(p.x, p.y - s);
-  ctx.lineTo(p.x, p.y + s);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2.5 / scale;
-  ctx.stroke();
+  ctx.moveTo(p.x - s, p.y); ctx.lineTo(p.x + s, p.y);
+  ctx.moveTo(p.x, p.y - s); ctx.lineTo(p.x, p.y + s);
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5 / scale; ctx.stroke();
 }
 
 function drawMagnifier(p) {
   const dpr = window.devicePixelRatio || 1;
   const zoom = 2.5;
   const r = LUPA_RADIO * dpr;
-
   const posX = p.x * scale * dpr;
   const posY = p.y * scale * dpr;
   const lupaY = posY - (LUPA_OFFSET * dpr);
@@ -231,76 +205,47 @@ function drawMagnifier(p) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.beginPath();
   ctx.arc(posX, lupaY, r, 0, Math.PI * 2);
-  ctx.fillStyle = "black";
-  ctx.fill();
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 3 * dpr;
-  ctx.stroke();
+  ctx.fillStyle = "black"; ctx.fill();
+  ctx.strokeStyle = "white"; ctx.lineWidth = 3 * dpr; ctx.stroke();
   ctx.clip();
 
   ctx.translate(posX, lupaY);
   ctx.scale(zoom * scale * dpr, zoom * scale * dpr);
   ctx.translate(-p.x, -p.y);
   ctx.drawImage(img, 0, 0);
-
   renderMedicalLines(ctx, zoom);
   ctx.restore();
 
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.strokeStyle = "red";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "red"; ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(posX - 15, lupaY);
-  ctx.lineTo(posX + 15, lupaY);
-  ctx.moveTo(posX, lupaY - 15);
-  ctx.lineTo(posX, lupaY + 15);
-  ctx.stroke();
-  ctx.restore();
+  ctx.moveTo(posX - 15, lupaY); ctx.lineTo(posX + 15, lupaY);
+  ctx.moveTo(posX, lupaY - 15); ctx.lineTo(posX, lupaY + 15);
+  ctx.stroke(); ctx.restore();
 }
 
-// === 5. CÁLCULO PM (ORIGINAL) ===
+// === 5. CÁLCULOS Y UI ===
 function calculatePM() {
-  const dx = points[1].x - points[0].x;
-  const dy = points[1].y - points[0].y;
+  const dx = points[1].x - points[0].x, dy = points[1].y - points[0].y;
   const mag = Math.hypot(dx, dy);
   if (mag < 1e-6) return;
-
-  const ux = dx / mag;
-  const uy = dy / mag;
+  const ux = dx / mag, uy = dy / mag;
   const proj = p => p.x * ux + p.y * uy;
   const center = (proj(points[0]) + proj(points[1])) / 2;
-
-  const pmR = (Math.abs(
-    Math.max(proj(points[4]), proj(points[5])) - proj(points[2])
-  ) / Math.abs(proj(points[4]) - proj(points[5]))) * 100;
-
-  const pmL = (Math.abs(
-    Math.max(proj(points[6]), proj(points[7])) - proj(points[3])
-  ) / Math.abs(proj(points[6]) - proj(points[7]))) * 100;
-
-  output.innerHTML = `<strong>D:</strong> ${pmR.toFixed(1)}% | <strong>I:</strong> ${pmL.toFixed(1)}%`;
+  const getPMValue = (pIdx, latIdx, medIdx) => {
+    const per = proj(points[pIdx]);
+    const a = proj(points[latIdx]), b = proj(points[medIdx]);
+    const lat = Math.abs(a - center) > Math.abs(b - center) ? a : b;
+    const med = lat === a ? b : a;
+    return (Math.abs(lat - per) / Math.abs(lat - med)) * 100;
+  };
+  output.innerHTML = `<strong>D:</strong> ${getPMValue(2,4,5).toFixed(1)}% | <strong>I:</strong> ${getPMValue(3,6,7).toFixed(1)}%`;
 }
 
 function updateUI() {
-  instruction.textContent =
-    points.length < labels.length
-      ? "MARCAR: " + labels[points.length]
-      : "✓ DESLICE LÍNEAS PARA AJUSTAR";
+  instruction.textContent = points.length < labels.length ? "MARCAR: " + labels[points.length] : "✓ AJUSTE LÍNEAS VERTICALES";
 }
 
-undoBtn.onclick = () => {
-  points.pop();
-  output.innerHTML = "";
-  updateUI();
-  draw();
-};
-
-resetBtn.onclick = () => {
-  if (confirm("¿Reiniciar?")) {
-    points = [];
-    output.innerHTML = "";
-    updateUI();
-    draw();
-  }
-};
+undoBtn.onclick = () => { points.pop(); output.innerHTML = ""; updateUI(); draw(); };
+resetBtn.onclick = () => { if (confirm("¿Reiniciar?")) { points = []; output.innerHTML = ""; updateUI(); draw(); } };
