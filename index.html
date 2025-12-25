@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0066cc">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <link rel="stylesheet" href="style.css" />
+
   <style>
     /* Asegura que los elementos desktop-only se oculten en móviles */
     @media (max-width: 768px) {
@@ -14,7 +15,14 @@
         display: none !important;
       }
     }
-    
+
+    /* NUEVO: elementos sólo mobile */
+    @media (min-width: 769px) {
+      .mobile-only {
+        display: none !important;
+      }
+    }
+
     /* Estilo básico para el contenedor del slider */
     .slider-container {
       margin-bottom: 15px; 
@@ -31,8 +39,16 @@
 
 <p id="instruction" style="font-weight: bold; color: #0066cc; font-size: 1.1em; text-align: center; margin-bottom: 10px;"></p>
 
+<!-- INPUT ORIGINAL (NO SE TOCA) -->
 <div style="padding: 10px; text-align: center;">
   <input type="file" id="imageInput" accept="image/*" capture="environment" />
+</div>
+
+<!-- NUEVO: INPUTS EXTRA SÓLO PARA MOBILE -->
+<div class="mobile-only" style="padding: 10px; text-align: center;">
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" />
+  <br><br>
+  <input type="file" id="fileInput" accept="image/*" />
 </div>
 
 <div class="container">
